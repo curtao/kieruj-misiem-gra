@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+  <meta name="robots" content="noindex, nofollow">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="theme-color" content="#1b1c1f">
+  <title>Kieruj Misiem – wersja testowa</title>
+  <style>
+    html, body { margin: 0; height: 100%; background: #1b1c1f; overflow: hidden; color: #f2efe8; overscroll-behavior: none;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; -webkit-user-select: none; user-select: none;
+      -webkit-touch-callout: none; touch-action: none; }
+    #gra { position: fixed; inset: 0; width: 100vw; height: 100vh; height: 100dvh; display: block; outline: none; touch-action: none; }
+    .warstwa { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
+      gap: 16px; padding: 24px; background: #1b1c1f; text-align: center; }
+    .znak { color: #e8382c; font-weight: 800; font-size: 13px; letter-spacing: .14em; }
+    h1 { margin: 0; font-size: clamp(26px, 5vw, 44px); font-weight: 800; }
+    .pasek { width: min(420px, 75vw); height: 8px; background: #ffffff1c; border-radius: 4px; overflow: hidden; }
+    .wypelnienie { height: 100%; width: 0; background: #e8382c; transition: width .2s; }
+    p { margin: 0; color: #f2efe8a8; font-size: 15px; line-height: 1.55; max-width: 560px; }
+    #etap { color: #f2efe8; font-weight: 600; }
+    kbd { display: inline-block; min-width: 1.6em; padding: 1px 6px; border-radius: 5px; background: #f2efe8; color: #222;
+      font: 700 13px/1.5 Arial, sans-serif; box-shadow: 0 2px 0 #8a857c; margin: 0 1px; }
+    #blad { color: #ff8a80; display: none; font-size: 13px; max-width: 640px; word-break: break-word; }
+    #pelny { position: fixed; left: 50%; transform: translateX(-50%); bottom: 4px; z-index: 5; display: none; background: #1b1c1fb0;
+      color: #f2efe8c0; border: 0; border-radius: 8px; padding: 4px 12px; font: 600 12px sans-serif; cursor: pointer; }
+    #obroc { display: none; z-index: 10; }
+    .telefon { width: 46px; height: 80px; border: 4px solid #f2efe8; border-radius: 10px; animation: obrot 2s ease-in-out infinite; }
+    @keyframes obrot { 0%, 30% { transform: rotate(0deg); } 60%, 100% { transform: rotate(-90deg); } }
+    @media (orientation: portrait) and (pointer: coarse) { #obroc { display: flex; } }
+  </style>
+</head>
+<body>
+  <canvas id="gra" tabindex="-1"></canvas>
+  <div id="ladowanie" class="warstwa">
+    <div class="znak">MIŚ KROSNO · WERSJA TESTOWA</div>
+    <h1>Kieruj Misiem</h1>
+    <div class="pasek"><div class="wypelnienie" id="postep"></div></div>
+    <p id="etap">Tankujemy Misia…</p>
+    <p id="opis"></p>
+    <p id="blad"></p>
+  </div>
+  <div id="obroc" class="warstwa">
+    <div class="telefon"></div>
+    <h1>Obróć telefon. Miś jedzie poziomo</h1>
+    <p>Gra działa w poziomie. Jeśli telefon się nie obraca, wyłącz blokadę orientacji ekranu.</p>
+  </div>
+  <button id="pelny" type="button">Pełny ekran</button>
+  <script>
+    // ?cisza w adresie: gra działa normalnie, ale nic nie wychodzi na głośniki (automatyczne testy dźwięku po cichu).
+    // Każdy kontekst audio dostaje zamiast wyjścia wzmacniacz z zerowym wzmocnieniem.
+    if (/[?&]cisza\b/.test(location.search) && window.BaseAudioContext) {
+      var wyjscie = Object.getOwnPropertyDescriptor(BaseAudioContext.prototype, "destination");
+      Object.defineProperty(BaseAudioContext.prototype, "destination", { configurable: true, get: function () {
+        if (!this.__cisza) {
+          this.__cisza = this.createGain(); this.__cisza.gain.value = 0;
+          this.__cisza.maxChannelCount = 2;
+          this.__cisza.connect(wyjscie.get.call(this));
+        }
+        return this.__cisza;
+      } });
+      window.__kmCisza = true;
+    }
+  </script>
+  <script src="Build/Web.loader.js"></script>
+  <script>
+    var dotyk = window.matchMedia("(pointer: coarse)").matches || /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+    var canvas = document.getElementById("gra");
+    var postep = document.getElementById("postep");
+    var etap = document.getElementById("etap");
+    var blad = document.getElementById("blad");
+    document.getElementById("opis").innerHTML = dotyk
+      ? "Sterowanie na ekranie: z lewej kierowanie, z prawej gaz i hamulec (im wyżej palec na pedale, tym mocniej; na postoju puść hamulec i wciśnij go ponownie: wsteczny) oraz przyciski drzwi, kierunkowskazów i ogranicznika. Telefon trzymaj poziomo. Dźwięk wyciszysz w ustawieniach (pauza)."
+      : "Najlepiej grać w Chrome albo Edge.<br><kbd>W</kbd><kbd>S</kbd> gaz i hamulec (przytrzymanie: płynnie jak w autobusie, <kbd>Shift</kbd> do oporu, awaryjnie; na postoju puść <kbd>S</kbd> i wciśnij znowu: wsteczny), <kbd>A</kbd><kbd>D</kbd> kierownica, <kbd>O</kbd> drzwi, " +
+        "<kbd>G</kbd> ogranicznik, <kbd>M</kbd> dźwięk, <kbd>Esc</kbd> pauza i pełna lista sterowania.";
+    function pokazBlad(tekst) { blad.style.display = "block"; blad.textContent += (blad.textContent ? "\n" : "") + tekst; }
+    window.addEventListener("error", function (e) { pokazBlad("Błąd: " + (e.message || e)); });
+    window.addEventListener("unhandledrejection", function (e) { pokazBlad("Błąd: " + (e.reason && e.reason.message || e.reason)); });
+    // hasła w czasie ładowania (własne teksty, bez cytatów z filmów)
+    var hasla = ["Tankujemy Misia…", "Kierowca szuka kluczyków…", "Sprawdzamy rozkład jazdy…", "Myjemy szyby…", "Pasażerowie zajmują miejsca…"];
+    var nrHasla = 0, uruchamianie = false;
+    var zmianaHasla = setInterval(function () {
+      if (uruchamianie) return;
+      nrHasla = (nrHasla + 1) % hasla.length; etap.textContent = hasla[nrHasla];
+    }, 1800);
+    var start = Date.now();
+    createUnityInstance(canvas, {
+      dataUrl: "Build/Web.data.unityweb",
+      frameworkUrl: "Build/Web.framework.js.unityweb",
+      codeUrl: "Build/Web.wasm.unityweb",
+      streamingAssetsUrl: "StreamingAssets",
+      companyName: "Mis Krosno",
+      productName: "Kieruj Misiem",
+      productVersion: "0.1.0",
+      matchWebGLToCanvasSize: true,
+      autoSyncPersistentDataPath: true,
+      devicePixelRatio: Math.min(window.devicePixelRatio || 1, dotyk ? 1.25 : 1.5),
+      showBanner: function (msg, type) { if (type === "error") pokazBlad(msg); }
+    }, function (p) {
+      postep.style.width = Math.round(p * 100) + "%";
+      if (p >= 0.9 && !uruchamianie) { uruchamianie = true; etap.textContent = "Kierowca przekręca kluczyk… (na telefonie to może potrwać kilkanaście sekund)"; }
+    })
+    .then(function (unity) {
+      clearInterval(zmianaHasla);
+      document.getElementById("ladowanie").remove();
+      function pelnyEkran() {
+        unity.SetFullscreen(1);
+        if (screen.orientation && screen.orientation.lock) screen.orientation.lock("landscape").catch(function () {});
+      }
+      if (dotyk) {
+        // na telefonie pełny ekran przy pierwszym dotknięciu (przeglądarka pozwala na to tylko po geście użytkownika)
+        canvas.addEventListener("touchend", pelnyEkran, { once: true });
+      } else {
+        var btn = document.getElementById("pelny");
+        btn.style.display = "block";
+        btn.onclick = pelnyEkran;
+      }
+      canvas.focus();
+      console.log("Kieruj Misiem: start po " + ((Date.now() - start) / 1000).toFixed(1) + " s");
+    })
+    .catch(function (e) { pokazBlad("Nie udało się uruchomić gry w tej przeglądarce: " + e); });
+  </script>
+</body>
+</html>
